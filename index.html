@@ -34,7 +34,7 @@
       <textarea id="incident-desc" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500" placeholder="Ex: Alarme seringue, fuite..."></textarea>
       
       <button id="btn-submit" type="button" class="w-full bg-red-600 hover:bg-red-500 text-white font-medium py-3 rounded-xl transition duration-150 shadow-lg shadow-red-600/30 flex items-center justify-center space-x-2">
-        <span>🚨 Signaler la panne</span>
+        <span>🚨 Signaler la panne (avec GPS)</span>
       </button>
 
       <p id="status-msg" class="hidden text-center text-sm font-medium mt-2"></p>
@@ -74,7 +74,6 @@
       let lng = null;
       let mapsUrl = null;
 
-      // Récupération de la position GPS
       if (navigator.geolocation) {
         try {
           const position = await new Promise((resolve, reject) => {
