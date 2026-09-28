@@ -52,9 +52,9 @@
 
     // Extraction des paramètres URL
     const urlParams = new URLSearchParams(window.location.search);
-    const assetId = urlParams.get('asset_id') || 'INCONNU';
-    const companyCode = urlParams.get('company_code') || urlParams.get('company') || '';
-
+   const urlParams = new URLSearchParams(window.location.search);
+const assetId = urlParams.get('id') || urlParams.get('asset_id') || 'INCONNU';
+const companyCode = urlParams.get('company') || urlParams.get('company_code') || '';
     document.getElementById('asset-id-display').innerText = `ID: ${assetId}`;
     document.getElementById('asset-name').innerText = `Machine : ${assetId}`;
 
