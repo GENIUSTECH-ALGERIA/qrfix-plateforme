@@ -45,21 +45,25 @@
   </div>
 
   <script>
-    // Initialisation Supabase
+<script>
+    // 1. Initialisation Supabase sécurisée
     const SUPABASE_URL = "https://vgvzsawpetlitxxzwhpu.supabase.co";
     const SUPABASE_ANON = "sb_publishable_LtOTN3w-rBdYduoUjBfhxg_Zzmz_su6";
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    const supabaseClient = (window.supabase && window.supabase.createClient) 
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON) 
+      : null;
 
-    // Extraction des paramètres URL
+    // 2. Extraction des paramètres (tolère id ou asset_id, company ou company_code)
     const urlParams = new URLSearchParams(window.location.search);
-   const urlParams = new URLSearchParams(window.location.search);
-const assetId = urlParams.get('id') || urlParams.get('asset_id') || 'INCONNU';
-const companyCode = urlParams.get('company') || urlParams.get('company_code') || '';
+    const assetId = urlParams.get('id') || urlParams.get('asset_id') || 'INCONNU';
+    const companyCode = urlParams.get('company') || urlParams.get('company_code') || '';
+
     document.getElementById('asset-id-display').innerText = `ID: ${assetId}`;
     document.getElementById('asset-name').innerText = `Machine : ${assetId}`;
 
     async function reportIncident() {
-      const desc = document.getElementById('incident-desc').value.trim();
+      const descInput = document.getElementById('incident-desc');
+      const desc = descInput.value.trim();
       const btn = document.getElementById('btn-submit');
       const status = document.getElementById('status-msg');
       const waBtn = document.getElementById('btn-wa');
@@ -69,57 +73,74 @@ const companyCode = urlParams.get('company') || urlParams.get('company_code') ||
         return;
       }
 
+      if (!supabaseClient) {
+        alert("Erreur de connexion à Supabase. Veuillez recharger la page.");
+        return;
+      }
+
       btn.disabled = true;
-      btn.innerText = "Localisation GPS en cours...";
+      btn.innerText = "⏳ Envoi en cours...";
+      status.className = "text-center text-sm font-medium text-cyan-400 block mt-2";
+      status.innerText = "Traitement du signalement...";
 
       let lat = null;
       let lng = null;
       let mapsUrl = null;
 
+      // Récupération GPS avec timeout court (2 secondes max pour ne pas bloquer)
       if ("geolocation" in navigator) {
         try {
-          const pos = await new Promise((res, rej) => {
-            navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 6000 });
+          const pos = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 2000
+            });
           });
           lat = pos.coords.latitude;
           lng = pos.coords.longitude;
           mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
         } catch (e) {
-          console.warn("GPS non partagé :", e.message);
+          console.warn("GPS ignoré ou refusé :", e.message);
         }
       }
 
-      btn.innerText = "Enregistrement en cours...";
+      try {
+        const { data, error } = await supabaseClient
+          .from('incident_reports')
+          .insert([{
+            asset_id: assetId,
+            company_code: companyCode,
+            description: desc,
+            latitude: lat,
+            longitude: lng,
+            maps_url: mapsUrl,
+            status: 'EN_ARRET'
+          }]);
 
-      // Envoi du ticket avec company_code (fini le NULL)
-      const { error } = await supabaseClient.from('incident_reports').insert([{
-        asset_id: assetId,
-        company_code: companyCode,
-        description: desc,
-        latitude: lat,
-        longitude: lng,
-        maps_url: mapsUrl,
-        status: 'EN_ARRET'
-      }]);
+        if (error) {
+          console.error("Erreur Supabase :", error);
+          status.className = "text-center text-sm font-medium text-red-400 block mt-2";
+          status.innerText = "❌ Erreur Supabase : " + (error.message || "Impossible d'enregistrer.");
+        } else {
+          status.className = "text-center text-sm font-medium text-emerald-400 block mt-2";
+          status.innerText = "✅ Panne signalée avec succès au gestionnaire !";
 
-      if (!error) {
-        status.className = "text-center text-sm font-medium text-emerald-400 block mt-2";
-        status.innerText = "✅ Panne signalée avec succès au gestionnaire !";
-        
-        const waText = encodeURIComponent(`🚨 Panne signalée sur ${assetId}\nEntreprise: ${companyCode}\nMessage: ${desc}\nPosition GPS: ${mapsUrl || "Non renseignée"}`);
-        waBtn.href = `https://wa.me/213555880897?text=${waText}`;
-        waBtn.classList.remove('hidden');
+          const waText = encodeURIComponent(`🚨 Panne signalée sur ${assetId}\nEntreprise: ${companyCode}\nDescription: ${desc}\nPosition: ${mapsUrl || "Non renseignée"}`);
+          waBtn.href = `https://wa.me/213555880897?text=${waText}`;
+          waBtn.classList.remove('hidden');
 
-        document.getElementById('incident-desc').value = "";
-      } else {
-        console.error("Erreur insertion Supabase :", error);
+          descInput.value = "";
+        }
+      } catch (err) {
+        console.error("Exception :", err);
         status.className = "text-center text-sm font-medium text-red-400 block mt-2";
-        status.innerText = "Erreur de transmission. Réessayez.";
+        status.innerText = "❌ Erreur : " + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🚨 Signaler la panne (avec GPS)";
       }
-
-      btn.disabled = false;
-      btn.innerText = "🚨 Signaler la panne (avec GPS)";
     }
+  </script>
   </script>
 </body>
 </html>
