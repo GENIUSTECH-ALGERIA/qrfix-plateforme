@@ -14,14 +14,14 @@
       <div class="w-10 h-10 bg-cyan-500 rounded-lg flex items-center justify-center font-bold text-slate-900 text-xl">Q</div>
       <div>
         <h1 class="text-xl font-bold tracking-tight">QRFix Passport</h1>
-        <p class="text-xs text-slate-400" id="asset-id-display">Chargement de l'actif...</p>
+        <p class="text-xs text-slate-400" id="asset-id-display">Chargement...</p>
       </div>
     </div>
 
     <!-- Détails Équipement -->
     <div class="bg-slate-900/60 rounded-xl p-4 mb-6 border border-slate-700/50">
       <h2 class="text-lg font-semibold text-cyan-400" id="asset-name">Équipement</h2>
-      <p class="text-sm text-slate-400 mt-1" id="asset-desc">Signalement direct</p>
+      <p class="text-sm text-slate-400 mt-1">Signalement direct</p>
       <div class="mt-4 pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
         <span class="text-slate-400">Statut :</span>
         <span id="asset-status" class="bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full font-medium">Opérationnel</span>
@@ -30,11 +30,11 @@
 
     <!-- Formulaire Incident -->
     <div class="space-y-4">
-      <label class="block text-sm font-medium text-slate-300">Description de l'incident / Panne constatée</label>
-      <textarea id="incident-desc" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500" placeholder="Ex: Fuite de seringue, alarme de pression..."></textarea>
+      <label class="block text-sm font-medium text-slate-300">Description de la panne</label>
+      <textarea id="incident-desc" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500" placeholder="Ex: Alarme seringue, fuite..."></textarea>
       
-      <button id="btn-submit" onclick="reportIncident()" class="w-full bg-red-600 hover:bg-red-500 text-white font-medium py-3 rounded-xl transition duration-150 shadow-lg shadow-red-600/30 flex items-center justify-center space-x-2">
-        <span>🚨 Signaler la panne (avec GPS)</span>
+      <button id="btn-submit" type="button" class="w-full bg-red-600 hover:bg-red-500 text-white font-medium py-3 rounded-xl transition duration-150 shadow-lg shadow-red-600/30 flex items-center justify-center space-x-2">
+        <span>🚨 Signaler la panne</span>
       </button>
 
       <p id="status-msg" class="hidden text-center text-sm font-medium mt-2"></p>
@@ -45,15 +45,7 @@
   </div>
 
   <script>
-<script>
-    // 1. Initialisation Supabase sécurisée
-    const SUPABASE_URL = "https://vgvzsawpetlitxxzwhpu.supabase.co";
-    const SUPABASE_ANON = "sb_publishable_LtOTN3w-rBdYduoUjBfhxg_Zzmz_su6";
-    const supabaseClient = (window.supabase && window.supabase.createClient) 
-      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON) 
-      : null;
-
-    // 2. Extraction des paramètres (tolère id ou asset_id, company ou company_code)
+    // Lecture des paramètres URL
     const urlParams = new URLSearchParams(window.location.search);
     const assetId = urlParams.get('id') || urlParams.get('asset_id') || 'INCONNU';
     const companyCode = urlParams.get('company') || urlParams.get('company_code') || '';
@@ -61,86 +53,60 @@
     document.getElementById('asset-id-display').innerText = `ID: ${assetId}`;
     document.getElementById('asset-name').innerText = `Machine : ${assetId}`;
 
-    async function reportIncident() {
-      const descInput = document.getElementById('incident-desc');
+    const btn = document.getElementById('btn-submit');
+    const descInput = document.getElementById('incident-desc');
+    const statusMsg = document.getElementById('status-msg');
+    const waBtn = document.getElementById('btn-wa');
+
+    btn.addEventListener('click', async function() {
       const desc = descInput.value.trim();
-      const btn = document.getElementById('btn-submit');
-      const status = document.getElementById('status-msg');
-      const waBtn = document.getElementById('btn-wa');
 
       if (!desc) {
-        alert("Veuillez saisir une brève description du problème.");
-        return;
-      }
-
-      if (!supabaseClient) {
-        alert("Erreur de connexion à Supabase. Veuillez recharger la page.");
+        alert("Veuillez saisir une description de la panne.");
         return;
       }
 
       btn.disabled = true;
-      btn.innerText = "⏳ Envoi en cours...";
-      status.className = "text-center text-sm font-medium text-cyan-400 block mt-2";
-      status.innerText = "Traitement du signalement...";
-
-      let lat = null;
-      let lng = null;
-      let mapsUrl = null;
-
-      // Récupération GPS avec timeout court (2 secondes max pour ne pas bloquer)
-      if ("geolocation" in navigator) {
-        try {
-          const pos = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: false,
-              timeout: 2000
-            });
-          });
-          lat = pos.coords.latitude;
-          lng = pos.coords.longitude;
-          mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-        } catch (e) {
-          console.warn("GPS ignoré ou refusé :", e.message);
-        }
-      }
+      btn.innerText = "Envoi en cours...";
+      statusMsg.className = "text-center text-sm font-medium text-cyan-400 block mt-2";
+      statusMsg.innerText = "Connexion à la base de données...";
 
       try {
-        const { data, error } = await supabaseClient
-          .from('incident_reports')
-          .insert([{
-            asset_id: assetId,
-            company_code: companyCode,
-            description: desc,
-            latitude: lat,
-            longitude: lng,
-            maps_url: mapsUrl,
-            status: 'EN_ARRET'
-          }]);
+        const client = supabase.createClient(
+          "https://vgvzsawpetlitxxzwhpu.supabase.co",
+          "sb_publishable_LtOTN3w-rBdYduoUjBfhxg_Zzmz_su6"
+        );
+
+        const { error } = await client.from('incident_reports').insert([{
+          asset_id: assetId,
+          company_code: companyCode,
+          description: desc,
+          status: 'EN_ARRET'
+        }]);
 
         if (error) {
-          console.error("Erreur Supabase :", error);
-          status.className = "text-center text-sm font-medium text-red-400 block mt-2";
-          status.innerText = "❌ Erreur Supabase : " + (error.message || "Impossible d'enregistrer.");
+          statusMsg.className = "text-center text-sm font-medium text-red-400 block mt-2";
+          statusMsg.innerText = "Erreur : " + error.message;
+          btn.disabled = false;
+          btn.innerText = "🚨 Signaler la panne";
         } else {
-          status.className = "text-center text-sm font-medium text-emerald-400 block mt-2";
-          status.innerText = "✅ Panne signalée avec succès au gestionnaire !";
-
-          const waText = encodeURIComponent(`🚨 Panne signalée sur ${assetId}\nEntreprise: ${companyCode}\nDescription: ${desc}\nPosition: ${mapsUrl || "Non renseignée"}`);
+          statusMsg.className = "text-center text-sm font-medium text-emerald-400 block mt-2";
+          statusMsg.innerText = "✅ Panne transmise avec succès !";
+          
+          const waText = encodeURIComponent(`🚨 Panne signalée sur ${assetId}\nEntreprise: ${companyCode}\nDescription: ${desc}`);
           waBtn.href = `https://wa.me/213555880897?text=${waText}`;
           waBtn.classList.remove('hidden');
 
           descInput.value = "";
+          btn.innerText = "Signalé ✅";
         }
       } catch (err) {
-        console.error("Exception :", err);
-        status.className = "text-center text-sm font-medium text-red-400 block mt-2";
-        status.innerText = "❌ Erreur : " + err.message;
-      } finally {
+        statusMsg.className = "text-center text-sm font-medium text-red-400 block mt-2";
+        statusMsg.innerText = "Erreur inattendue : " + err.message;
         btn.disabled = false;
-        btn.innerText = "🚨 Signaler la panne (avec GPS)";
+        btn.innerText = "🚨 Signaler la panne";
       }
-    }
-  </script>
+    });
   </script>
 </body>
 </html>
